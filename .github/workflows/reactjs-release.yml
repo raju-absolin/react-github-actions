@@ -1,0 +1,112 @@
+name: React js Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x] # 14.x, 16.x,
+    steps:
+      - name: NodeJS Set-up
+        uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm install
+      - name: Test
+        run: npm test
+        env:
+          CI: true
+      - name: Generate build
+        run: npm run build
+      # Share artifact inside workflow
+      - name: Share artifact inside workflow
+        uses: actions/upload-artifact@v3
+        with:
+          name: react-github-actions-build
+          path: build
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   # When application is successfully tested and build has been generated
+  #   # Then we can start with deployment
+  #   needs: build
+  #   steps:
+  #     # Download previously shared build
+  #     - name: Get artifact
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: react-github-actions-build
+  #     # Set the credentials from repository settings/secrets
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v1
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+  #     # Copy the files from build folder to the S3 bucket
+  #     - name: Deploy to S3
+  #       run: aws s3 sync . s3://react-github-actions --acl public-read
+  #       working-directory: react-github-actions-build
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Get artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: react-github-actions-build
+          path: react-github-actions-build
+      - name: Zip build
+        uses: thedoctor0/zip-release@master
+        with:
+          filename: react-build-${{ github.ref_name  }}.zip
+          path: react-github-actions-build
+      - name: Upload build zip artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: react-build-${{ github.ref_name  }}.zip
+          path: react-build-${{ github.ref_name  }}.zip
+      # Make official GitHub release which will trigger
+      # sending the mail with link for access
+      #######
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: react-release-build.zip
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+
+      - run:  echo "$github.ref_name"
+      - name: Release
+        uses: actions/create-release@v1
+        id: create_release
+        with:
+          draft: false
+          prerelease: false
+          release_name: ${{ github.ref }}
+          tag_name: ${{ github.ref }}
+          # body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: upload release artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: react-release-build.zip
+          asset_name: react-release-build.zip
+          asset_content_type: application/zip
+          ######
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name , 'rc')
+        with:
+          files: react-build-${{ github.ref_name  }}.zip
