@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-app
+  labels:
+    app: react-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: react-app
+  template:
+    metadata:
+      labels:
+        app: react-app
+    spec:
+      containers:
+        - name: react-app
+          image: docker.cluster.absol.in/react-app:dev
+          imagePullPolicy: Always
+          command:
+            - nginx
+            - "-g"
+            - "daemon off;"
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "100Mi"
+            limits:
+              cpu: "10m"
+              memory: "300Mi"
+      imagePullSecrets:
+        - name: registry-secret
